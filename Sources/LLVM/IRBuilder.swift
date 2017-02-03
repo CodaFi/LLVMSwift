@@ -885,11 +885,17 @@ public class IRBuilder {
   ///
   /// - parameter type: The sized type used to determine the amount of stack
   ///   memory to allocate.
+  /// - parameter count: An optional number of slots to allocate, to simulate a
+  ///                    C array.
   /// - parameter name: The name for the newly inserted instruction.
   ///
   /// - returns: A value representing `void`.
-  public func buildAlloca(type: IRType, name: String = "") -> IRValue {
-    return LLVMBuildAlloca(llvm, type.asLLVM(), name)
+  public func buildAlloca(type: IRType, count: IRValue? = nil, name: String = "") -> IRValue {
+    if let count = count {
+      return LLVMBuildArrayAlloca(llvm, type.asLLVM(), count.asLLVM(), name)
+    } else {
+      return LLVMBuildAlloca(llvm, type.asLLVM(), name)
+    }
   }
 
   /// Build a store instruction that stores the first value into the location
@@ -1012,13 +1018,49 @@ public class IRBuilder {
   /// - parameter val: The value to test.
   /// - parameter name: The name for the newly inserted instruction.
   ///
-  /// - returns: An `i1`` value representing the result of a test to see if the
+  /// - returns: An `i1` value representing the result of a test to see if the
   ///   value is not `null`.
   public func buildIsNotNull(_ val: IRValue, name: String = "") -> IRValue {
     return LLVMBuildIsNotNull(llvm, val.asLLVM(), name)
   }
 
   // MARK: Conversion Instructions
+
+  /// Builds a cast instruction that attempts to convert a given value to a
+  /// given type either by bitcast or by truncation.
+  ///
+  /// Casts must be between compatible types (`Int -> Int`, `Float -> Float`, etc.)
+  ///
+  /// - parameter val: The value to cast.
+  /// - parameter type: The destination type to cast the value to.
+  /// - parameter name: The name for the newly inserted instruction.
+  ///
+  /// - returns: A value representing the result of casting the given value to
+  ///   the given type.
+  public func buildCast(_ val: IRValue, type: IRType, name: String = "") -> IRValue {
+    if val.type is IntType && type is IntType {
+      return LLVMBuildIntCast(llvm, val.asLLVM(), type.asLLVM(), name)
+    } else if val.type is FloatType && type is FloatType {
+      return LLVMBuildFPCast(llvm, val.asLLVM(), type.asLLVM(), name)
+    } else if val.type is PointerType && type is PointerType {
+      return LLVMBuildPointerCast(llvm, val.asLLVM(), type.asLLVM(), name)
+    } else {
+      fatalError("Cannot construct cast between \(val.type) and \(type)")
+    }
+  }
+
+  /// Builds an instruction that either performs a sign-extension or a bitcast 
+  /// of the given value to a value of the given type.
+  ///
+  /// - parameter val: The value to cast or truncate.
+  /// - parameter type: The destination type.
+  /// - parameter name: The name for the newly inserted instruction.
+  ///
+  /// - returns: A value representing the result of sign-extending or bitcasting
+  ///   the given value to fit the given type.
+  public func buildSExtOrBitCast(_ val: IRValue, type: IRType, name: String = "") -> IRValue {
+    return LLVMBuildSExtOrBitCast(llvm, val.asLLVM(), type.asLLVM(), name)
+  }
 
   /// Builds an instruction that either performs a truncation or a bitcast of
   /// the given value to a value of the given type.
@@ -1069,7 +1111,13 @@ public class IRBuilder {
   /// - returns: A value representing the result of truncating the given value
   ///   to fit the given type.
   public func buildTrunc(_ val: IRValue, type: IRType, name: String = "") -> IRValue {
-    return LLVMBuildTrunc(llvm, val.asLLVM(), type.asLLVM(), name)
+    if val.type is FloatType && type is FloatType {
+      return LLVMBuildFPTrunc(llvm, val.asLLVM(), type.asLLVM(), name)
+    } else if val.type is IntType && type is IntType {
+      return LLVMBuildTrunc(llvm, val.asLLVM(), type.asLLVM(), name)
+    } else {
+      fatalError("Cannot truncate value of type \(val.type) to value of type \(type)")
+    }
   }
 
   /// Builds a sign extension instruction to sign extend the given value to
@@ -1096,6 +1144,21 @@ public class IRBuilder {
   ///   value to fit the given type.
   public func buildZExt(_ val: IRValue, type: IRType, name: String = "") -> IRValue {
     return LLVMBuildZExt(llvm, val.asLLVM(), type.asLLVM(), name)
+  }
+
+  /// Builds a floating-point extension instruction to extend the value from a 
+  /// smaller floating-point type to a larger floating-point type.  Extending
+  /// to a type with the same bitwidth builds a no-op cast.
+  ///
+  /// - parameter val: The value to extend.
+  /// - parameter type: The destination type.
+  /// - parameter name: The name for the newly inserted instruction.
+  ///
+  /// - returns: A value representing the result of extending the given floating
+  ///   value to a value of the given larger floating type.
+  public func buildFPExt(_ val: IRValue, type: IRType, name: String = "") -> IRValue {
+    precondition(val.type is FloatType && type is FloatType, "Cannot build fpcast between non-floating types")
+    return LLVMBuildFPExt(llvm, val.asLLVM(), type.asLLVM(), name)
   }
 
   /// Builds an integer-to-pointer instruction to convert the given value to the
@@ -1281,7 +1344,7 @@ public class IRBuilder {
   /// - parameter type: The intended result type being allocated. The result
   ///                   of the `malloc` will be a pointer to this type.
   /// - parameter count: An optional number of slots to allocate, to simulate a
-  ///                    C array. This is equivalent to
+  ///                    C array.
   /// - parameter name: The intended name for the `malloc`'d value.
   public func buildMalloc(_ type: IRType, count: IRValue? = nil,
                           name: String = "") -> IRValue {
