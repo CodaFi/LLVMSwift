@@ -1,0 +1,25 @@
+# Xcode
+# Build, test, and archive an Xcode workspace on macOS.
+# Add steps that install certificates, test, sign, and distribute the app, save build artifacts, and more:
+# https://docs.microsoft.com/vsts/pipelines/languages/xcode
+
+pool:
+  vmImage: 'macOS 10.13'
+
+steps:
+- script: export PATH=/usr/local/opt/llvm/bin:"${PATH}"
+- script: brew update
+  displayName: 'updating Homebrew'
+- script: brew install llvm
+  displayName: 'installing LLVM from Homebrew'
+- script: swift utils/make-pkgconfig.swift
+  displayName: 'building package configuration for LLVM'
+- script: swift package generate-xcodeproj
+  displayName: 'generating xcode project'
+- task: Xcode@5
+  inputs:
+    scheme: 'LLVM'
+    sdk: 'macosx'
+    configuration: 'Release'
+    xcodeVersion: 'default'
+    packageApp: false
