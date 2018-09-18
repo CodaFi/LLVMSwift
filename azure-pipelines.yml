@@ -14,12 +14,7 @@ steps:
   displayName: 'installing LLVM from Homebrew'
 - script: swift utils/make-pkgconfig.swift
   displayName: 'building package configuration for LLVM'
-- script: swift package generate-xcodeproj
-  displayName: 'generating xcode project'
-- task: Xcode@5
-  inputs:
-    scheme: 'LLVM'
-    sdk: 'macosx'
-    configuration: 'Release'
-    xcodeVersion: 'default'
-    packageApp: false
+- script: swift build 
+  displayName: 'running preliminary build'
+- script: swift test
+  displayName: 'running tests'
