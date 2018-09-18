@@ -3,18 +3,37 @@
 # Add steps that install certificates, test, sign, and distribute the app, save build artifacts, and more:
 # https://docs.microsoft.com/vsts/pipelines/languages/xcode
 
-pool:
-  vmImage: 'macOS 10.13'
+jobs:
+- job: macOS
+  pool:
+    vmImage: xcode9-macOS10.13
+  steps:
+  - script: export PATH=/usr/local/opt/llvm/bin:"${PATH}"
+  - script: brew update
+    displayName: 'updating Homebrew'
+  - script: brew install llvm
+    displayName: 'installing LLVM from Homebrew'
+  - script: swift utils/make-pkgconfig.swift
+    displayName: 'building package configuration for LLVM'
+  - script: swift build 
+    displayName: 'running preliminary build'
+  - script: swift test
+    displayName: 'running tests'
 
-steps:
-- script: export PATH=/usr/local/opt/llvm/bin:"${PATH}"
-- script: brew update
-  displayName: 'updating Homebrew'
-- script: brew install llvm
-  displayName: 'installing LLVM from Homebrew'
-- script: swift utils/make-pkgconfig.swift
-  displayName: 'building package configuration for LLVM'
-- script: swift build 
-  displayName: 'running preliminary build'
-- script: swift test
-  displayName: 'running tests'
+- job: Linux
+  pool:
+    vmImage: ubuntu-14.04
+  steps:
+  - script: export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:"${PKG_CONFIG_PATH}"
+  - script: wget -O - http://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+  - script: apt-add-repository "deb http://apt.llvm.org/trusty/ llvm-toolchain-trusty-6.0 main"
+  - script: apt-add-repository -y "ppa:ubuntu-toolchain-r/test"
+  - script: apt-get update
+  - script: apt-get install -y llvm-6.0
+  - script: ln -s /usr/bin/llvm-config-6.0 /usr/bin/llvm-config
+  - script: wget -q -O - https://swift.org/keys/all-keys.asc | gpg --import -
+  - script: wget https://swift.org/builds/swift-4.1-release/ubuntu1404/swift-4.1-RELEASE/swift-4.1-RELEASE-ubuntu14.04.tar.gz
+  - script: tar xzf swift-4.1-RELEASE-ubuntu14.04.tar.gz
+  - script: export PATH=${PWD}/swift-4.1-RELEASE-ubuntu14.04/usr/bin:"${PATH}"
+  - script: swift utils/make-pkgconfig.swift
+  - script: swift test
